@@ -8,7 +8,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 class Environment:
-    def __init__(self, bounds, resolution, params):
+    def __init__(self, bounds, resolution, params, debug=False):
 
         self.bounds_initial = bounds
         self.resolution = int(resolution)
@@ -16,7 +16,7 @@ class Environment:
         
         self.params = params
 
-        self.values_initial = self.create_scalar_field()
+        self.values_initial = self.create_scalar_field(debug=debug)
 
         self.bounds = self.get_bounds_for_rotate()
         if self.params['type'] != 'elliptical':
@@ -51,10 +51,13 @@ class Environment:
         return gpytorch.utils.grid.create_data_from_grid(grid_obs)
 
 
-    def create_scalar_field(self):
+    def create_scalar_field(self, debug=False):
 
         env_type = self.params['type']
         
+        if debug:
+            print(f'Creating {env_type} scalar field')
+
         if env_type == 'cosine':
             return self.scalar_field_cosine()
         elif env_type == 'isotropic':
@@ -189,6 +192,11 @@ class Environment:
     
 
     def visualize_2D(self, coords=None, values=None):
+        
+        if coords == None or values == None:
+            coords = self.coords
+            values = self.values
+        
         # Convert torch tensors to numpy arrays
         coords_np = coords.numpy()
         values_np = values.numpy()
@@ -204,25 +212,28 @@ class Environment:
         plt.show()
 
 
-def get_random_env(leak_len=40, type='anisotropic', env_params=None):
+def get_random_env(leak_len=40, type='anisotropic', env_params=None, debug=False):
     leak_len = leak_len # minimum dilution 0.0025
-    grid_len = leak_len*math.sqrt(2)
+    grid_len = int(leak_len*math.sqrt(2))
     xmin = -grid_len; xmax = grid_len; ymin = -grid_len; ymax = grid_len
     grid_bounds = [(xmin, xmax), (ymin, ymax)]
     grid_resolution = grid_len*2+1
 
     rng = np.random.default_rng()
 
-    if env_params is None:
+    if env_params == None:
         env_params = {
             'type': type
         }
+    
+    if 'type' not in env_params:
+        env_params['type'] = type
 
     # Setup rest of env_params with random numbers if necessary. This means you can call
     # this function with some env_params already set, if you want them to be static.
-    if type == 'elliptic':
-        c_low = 1 ; c_high = 100
-        d_low = 100; d_high = 1000
+    if type == 'elliptical':
+        c_low = 1 ; c_high = 40
+        d_low = 500; d_high = 1000
     else:
         c_low = 1; c_high = 20
         d_low = 25; d_high = 1000
@@ -237,9 +248,9 @@ def get_random_env(leak_len=40, type='anisotropic', env_params=None):
     # Plume
     if 'dilution' not in env_params:
         env_params['dilution'] = rng.integers(low=d_low, high=d_high)/10000.0 # [0.0025 0.1], corresponding to leak_lens of [40 5]
-    if 'location' not in env_params:
+    if 'location_initial' not in env_params:
         loc_min = -leak_len/2; loc_max = -loc_min
         env_params['location_initial'] = [rng.integers(low=loc_min, high=loc_max, endpoint=True),
                                   rng.integers(low=loc_min, high=loc_max, endpoint=True)]
     
-    return Environment(grid_bounds, grid_resolution, env_params)
+    return Environment(grid_bounds, grid_resolution, env_params, debug)
