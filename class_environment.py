@@ -17,7 +17,7 @@ class Environment:
         self.params = params
 
         self.values_initial = self.create_scalar_field(debug=debug)
-
+ 
         self.bounds = self.get_bounds_for_rotate()
         if self.params['type'] != 'elliptical':
             self.coords, self.values = self.rotate_environment()
