@@ -1,38 +1,37 @@
-import class_environment
-import math
+# adapted from https://github.com/philtabor/Youtube-Code-Repository
+import gym
+from auv import AUV
+from utils import plotLearning
 import numpy as np
-env = class_environment.get_random_env(leak_len=40, type='elliptical')
 
+if __name__ == '__main__':
+    env = gym.make('GridWorld-v0')
+    agent = AUV(gamma=0.99, epsilon=1.0, batch_size=64, n_actions=4, eps_end=0.01,
+                  input_dims=[8], lr=0.001)
+    scores, eps_history = [], []
+    n_games = 500
+    
+    for i in range(n_games):
+        score = 0
+        done = False
+        observation = env.reset()
+        while not done:
+            action = agent.choose_action(observation)
+            observation_, reward, done, info = env.step(action)
+            score += reward
+            agent.store_transition(observation, action, reward, 
+                                    observation_, done)
+            agent.learn()
+            observation = observation_
+        scores.append(score)
+        eps_history.append(agent.epsilon)
 
-leak_len = 40 # minimum dilution 0.0025
-grid_len = leak_len*math.sqrt(2)
-xmin = -grid_len
-xmax = grid_len
-ymin = -grid_len
-ymax = grid_len
-grid_bounds = [(xmin, xmax), (ymin, ymax)]
-grid_resolution = grid_len*2+1
+        avg_score = np.mean(scores[-100:])
 
-# Scenario type
-env_params = {
-    #'type': 'anisotropic'
-    'type': 'elliptical'
-}
-# Current params
-env_params['current_strength'] = 10 # anistropic: [1 20],  elliptic: [1 100]
-env_params['current_direction'] = -120  # [-180 180]
+        print('episode ', i, 'score %.2f' % score,
+                'average score %.2f' % avg_score,
+                'epsilon %.2f' % agent.epsilon)
+    x = [i+1 for i in range(n_games)]
+    filename = 'auv.png'
+    plotLearning(x, scores, eps_history, filename)
 
-# Plume params
-env_params['dilution'] = 0.1   # anistropic: [0.0025 0.1], corresponding to leak_lens of [40 5]
-                            # elliptic: [0.01 0.1]
-env_params['location_initial'] = [-21, -13]
-env_params['semi_major_axis'] = 20.0
-env_params['semi_minor_axis'] = 5.0
-
-# Get environment
-env = class_environment.Environment(grid_bounds, grid_resolution, env_params)
-
-# Visualize
-#fig_env = my_env.visualize_3D()
-env.visualize_2D()
-#fig_env.show()

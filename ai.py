@@ -1,12 +1,15 @@
 from auv import AUV
-from class_environment import Environment
+from env.class_environment import Environment
 
 def islegal(action,auv,grid):
     location = auv.pos
-    boundaries = grid.bounds
-    for bound in boundaries:
-        post = location
-
+    bound_x, bound_y = grid.bounds 
+    post = location + action # assuming [x,y]
+    if post[0] < bound_x[0] or post[0] > bound_x[1]: 
+        return False
+    if post[1] < bound_y[0] or post[1] > bound_y[1]:
+        return False
+    return True
 
 def policy(grid,auv,model):
     """
