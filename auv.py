@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as f
 import numpy as np
-
+torch.autograd.set_detect_anomaly(True)
 class DeepQNetwork(nn.Module):
     def __init__(self, lr, input_dims, fc1_dims, fc2_dims,
                  n_actions):
@@ -14,16 +14,16 @@ class DeepQNetwork(nn.Module):
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
         self.fc3 = nn.Linear(self.fc2_dims, self.n_actions)
-
+        self.sm = nn.Softmax()
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
-        self.loss = nn.MSELoss()
-        self.device = torch.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.loss = nn.CrossEntropyLoss()
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.to(self.device)
 
     def forward(self, state):
         x = f.relu(self.fc1(state))
-        x = f.relu(self.fc2(x))
-        actions = self.fc3(x)
+        y = f.relu(self.fc2(x))
+        actions = self.fc3(y)
 
         return actions
 
@@ -40,14 +40,15 @@ class AUV():
         self.mem_size = max_mem_size
         self.batch_size = batch_size
         self.mem_cntr = 0
+        self.iter_cntr = 0
         # deep Q learning only for discrete action spaces- need diff alg if changing to a course based pathing approach 
-        self.Q_eval = torch.nn.DeepQNetwork(self.lr,n_actions=n_actions,input_dims=input_dims,fc1_dims=layer_n1 ,fc2_dims=layer_n2 ) 
+        self.Q_eval = DeepQNetwork(self.lr,n_actions=n_actions,input_dims=input_dims,fc1_dims=layer_n1 ,fc2_dims=layer_n2 ) 
         
-        self.state_memory = np.zeroes((self.mem_size,*input_dims),dtype=np.float32)
-        self.new_state_memory = np.zeroes((self.mem_size,*input_dims),dtype=np.float32)
-        self.action_memory = np.zeroes(self.mem_size,dtype=np.int32)
-        self.reward_memory = np.zeroes(self.mem_size,dtype=np.float32)
-        self.terminal_memory = np.zeroes(self.mem_size,dtype=np.bool_)
+        self.state_memory = np.zeros((self.mem_size,*input_dims),dtype=np.float32)
+        self.new_state_memory = np.zeros((self.mem_size,*input_dims),dtype=np.float32)
+        self.action_memory = np.zeros(self.mem_size,dtype=np.int32)
+        self.reward_memory = np.zeros(self.mem_size,dtype=np.float32)
+        self.terminal_memory = np.zeros(self.mem_size,dtype=np.bool_)
         
     def store_transition(self,state,action,reward, state_,done):
         index=self.mem_cntr % self.mem_size # wrapping around to earliest memories if full
@@ -57,10 +58,10 @@ class AUV():
         self.reward_memory[index] = reward
         self.terminal_memory[index] = done
 
-        self.mem_sntr += 1
+        self.mem_cntr += 1
     def choose_action(self,observation):
         if np.random.random() > self.epsilon:
-            state = torch.tensor([observation]).to(self.Q_eval.device)
+            state = torch.tensor([observation],dtype = torch.float32).to(self.Q_eval.device)
             actions = self.Q_eval.forward(state)
             action = torch.argmax(actions).item()
         else:
@@ -73,37 +74,47 @@ class AUV():
         
         self.Q_eval.optimizer.zero_grad()
         
-        # probably just setting max for leearning
+        # probably just setting max for learning
         max_mem =  min(self.mem_cntr, self.mem_size)
         
-        batch = np.random.choice(max_mem,self.batch_size, replace= False) # also kind of an index
+        # random choice is for noobs
+        #batch = np.random.choice(max_mem,self.batch_size, replace= False) # also kind of an index
+        
+        index = self.mem_cntr % self.mem_size
+        index_u = (self.mem_cntr - self.batch_size) % self.mem_size
+        if index < index_u:
+            batch = np.concatenate((np.arange(index_u,self.mem_size),np.arange(0,index)))
+        else:
+            batch = np.arange(index_u,index)
 
         batch_index = np.arange(self.batch_size,dtype=np.int32)
         # sending batches to network
-        state_batch = torch.tensor(self.state_memory[batch]).to(self.Q_eval.device)
+        state_batch = torch.tensor(self.state_memory[batch],dtype=torch.float32).to(self.Q_eval.device)
         new_state_batch = torch.tensor(
-                self.new_state_memory[batch]).to(self.Q_eval.device)
+                self.new_state_memory[batch],dtype=torch.float32).to(self.Q_eval.device)
         action_batch = self.action_memory[batch]
         reward_batch = torch.tensor(
-                self.reward_memory[batch]).to(self.Q_eval.device)
+                self.reward_memory[batch],dtype=torch.float32).to(self.Q_eval.device)
         terminal_batch = torch.tensor(
                 self.terminal_memory[batch]).to(self.Q_eval.device)
 
         # results
         q_eval = self.Q_eval.forward(state_batch)[batch_index, action_batch]
         q_next = self.Q_eval.forward(new_state_batch)
-        q_next[terminal_batch] = 0.0
+        
+        q_next[terminal_batch] = torch.tensor(0.0).to(self.Q_eval.device)
 
-        q_target = reward_batch + self.gamma*torch.max(q_next, dim=1)[0] # what is dis
+        q_target = reward_batch + torch.tensor(self.gamma).to(self.Q_eval.device)*torch.max(q_next, dim=1)[0] # what is dis
 
         loss = self.Q_eval.loss(q_target, q_eval).to(self.Q_eval.device)
+        
         loss.backward()
         self.Q_eval.optimizer.step()
 
         self.iter_cntr += 1
         # control random choice here
-        self.epsilon = self.epsilon - self.eps_dec \
-            if self.epsilon > self.eps_min else self.eps_min
+        # self.epsilon = self.epsilon - self.eps_dec \
+        #     if self.epsilon > self.eps_min else self.eps_min
 
 
 

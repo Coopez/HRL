@@ -212,45 +212,45 @@ class Environment:
         plt.show()
 
 
-def get_random_env(leak_len=40, type='anisotropic', env_params=None, debug=False):
-    leak_len = leak_len # minimum dilution 0.0025
-    grid_len = int(leak_len*math.sqrt(2))
-    xmin = -grid_len; xmax = grid_len; ymin = -grid_len; ymax = grid_len
-    grid_bounds = [(xmin, xmax), (ymin, ymax)]
-    grid_resolution = grid_len*2+1
+    def get_random_env(leak_len=40, type='anisotropic', env_params=None, debug=False):
+        leak_len = leak_len # minimum dilution 0.0025
+        grid_len = int(leak_len*math.sqrt(2))
+        xmin = -grid_len; xmax = grid_len; ymin = -grid_len; ymax = grid_len
+        grid_bounds = [(xmin, xmax), (ymin, ymax)]
+        grid_resolution = grid_len*2+1
 
-    rng = np.random.default_rng()
+        rng = np.random.default_rng()
 
-    if env_params == None:
-        env_params = {
-            'type': type
-        }
-    
-    if 'type' not in env_params:
-        env_params['type'] = type
+        if env_params == None:
+            env_params = {
+                'type': type
+            }
+        
+        if 'type' not in env_params:
+            env_params['type'] = type
 
-    # Setup rest of env_params with random numbers if necessary. This means you can call
-    # this function with some env_params already set, if you want them to be static.
-    if type == 'elliptical':
-        c_low = 1 ; c_high = 40
-        d_low = 500; d_high = 1000
-    else:
-        c_low = 1; c_high = 20
-        d_low = 25; d_high = 1000
+        # Setup rest of env_params with random numbers if necessary. This means you can call
+        # this function with some env_params already set, if you want them to be static.
+        if type == 'elliptical':
+            c_low = 1 ; c_high = 40
+            d_low = 500; d_high = 1000
+        else:
+            c_low = 1; c_high = 20
+            d_low = 25; d_high = 1000
 
 
-    # Current
-    if 'current_strength' not in env_params:
-        env_params['current_strength'] = rng.integers(low=c_low, high=c_high, endpoint=True) # [1 20]
-    if 'current_direction' not in env_params:
-        env_params['current_direction'] = rng.integers(low=-180, high=180, endpoint=True)  # [-180 180]
+        # Current
+        if 'current_strength' not in env_params:
+            env_params['current_strength'] = rng.integers(low=c_low, high=c_high, endpoint=True) # [1 20]
+        if 'current_direction' not in env_params:
+            env_params['current_direction'] = rng.integers(low=-180, high=180, endpoint=True)  # [-180 180]
 
-    # Plume
-    if 'dilution' not in env_params:
-        env_params['dilution'] = rng.integers(low=d_low, high=d_high)/10000.0 # [0.0025 0.1], corresponding to leak_lens of [40 5]
-    if 'location_initial' not in env_params:
-        loc_min = -leak_len/2; loc_max = -loc_min
-        env_params['location_initial'] = [rng.integers(low=loc_min, high=loc_max, endpoint=True),
-                                  rng.integers(low=loc_min, high=loc_max, endpoint=True)]
-    
-    return Environment(grid_bounds, grid_resolution, env_params, debug)
+        # Plume
+        if 'dilution' not in env_params:
+            env_params['dilution'] = rng.integers(low=d_low, high=d_high)/10000.0 # [0.0025 0.1], corresponding to leak_lens of [40 5]
+        if 'location_initial' not in env_params:
+            loc_min = -leak_len/2; loc_max = -loc_min
+            env_params['location_initial'] = [rng.integers(low=loc_min, high=loc_max, endpoint=True),
+                                    rng.integers(low=loc_min, high=loc_max, endpoint=True)]
+        
+        return Environment(grid_bounds, grid_resolution, env_params, debug)
