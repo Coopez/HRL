@@ -68,7 +68,7 @@ class AUVGrid(gym.Env):
         #         #"target": spaces.Box(xbound[0], xbound[1], shape=(2,), dtype=int),
         #     }
         # )
-        self.observation_space = np.ones((self.size,self.size))
+        self.observation_space = np.zeros((self.size,self.size)) #np.ones((self.size,self.size))
 
         # We have 4 actions, corresponding to "right", "up", "left", "down"
         self.action_space = spaces.Discrete(4)
@@ -107,8 +107,9 @@ class AUVGrid(gym.Env):
         p = self.pollution[*self._agent_location].numpy().item()
         cs = float(self.cs) # can be expanded if current is uneven
         csdir = float(self.cdir) 
-        flat_hist = self.observation_space.flatten()
-        return np.concatenate((flat_hist,np.array([p,cs,csdir])))
+        #flat_hist = self.observation_space.flatten()
+        #return np.concatenate((flat_hist,np.array([p,cs,csdir])))
+        return np.array([p,cs,csdir])
     
     def angle_to_vector(self,angle_degrees):
         # Convert degrees to radians
@@ -136,8 +137,8 @@ class AUVGrid(gym.Env):
         #self._agent_location = self.np_random.integers(0, self.size, size=2, dtype=int)
         self._agent_location = np.array([0,0])
         
-        self.observation_space = np.ones((self.size,self.size))
-        self.observation_space[*self._agent_location] = 0
+        self.observation_space = np.zeros((self.size,self.size))#np.ones((self.size,self.size))
+        self.observation_space[*self._agent_location] = 1.0
         if options == None:
             #self.env = Environment.get_random_env(leak_len=self.env_length, type='elliptical')
             #self.import_env(self.env_length)
@@ -151,6 +152,7 @@ class AUVGrid(gym.Env):
             self._render_frame()
 
         return observation, info
+    
     def step(self, action,render =False):
         # Map the action (element of {0,1,2,3}) to the direction we walk in
         direction = self._action_to_direction[action]
@@ -158,12 +160,12 @@ class AUVGrid(gym.Env):
         self._agent_location = np.clip(
             self._agent_location + direction, 0, self.size - 1
         )
-        if self.observation_space[*self._agent_location] == 1.0:
-            self.observation_space[*self._agent_location] = 0.0 if self.pollution[*self._agent_location] < 0.001 else self.pollution[*self._agent_location]+2
-        elif self.observation_space[*self._agent_location] <  1.0: 
-            self.observation_space[*self._agent_location] -= 1.0
+        if self.observation_space[*self._agent_location] == 0.0:
+            self.observation_space[*self._agent_location] = 1.0 if self.pollution[*self._agent_location] < 0.001 else self.pollution[*self._agent_location]+2
+        elif self.observation_space[*self._agent_location] >  0.0: #or self.observation_space[*self._agent_location] <  0.0: 
+            self.observation_space[*self._agent_location] -= 1.001
         else:
-            pass # doing doubeltakes on pollution is fine?
+            pass 
         
         # An episode is done iff the agent has reached the target
         ### SO these are the rewards and termination condition
@@ -180,6 +182,7 @@ class AUVGrid(gym.Env):
             self._render_frame()
 
         return observation, reward, terminated, info
+    
     def render(self):
         if self.render_mode == "rgb_array":
             return self._render_frame()
@@ -226,8 +229,8 @@ class AUVGrid(gym.Env):
                 color = (int(color[0] * 255), int(color[1] * 255), int(color[2] * 255))
                 
                 # update color depending on square which has been tread upon.
-                if self.observation_space[x,y] != 1.0:
-                    if self.observation_space[x,y] == 0.0:
+                if self.observation_space[x,y] != 0.0:
+                    if self.observation_space[x,y] == 1.0:
                         color = (150,150,150) 
                     else:
                         history=self.observation_space[x,y]

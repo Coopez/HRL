@@ -50,7 +50,13 @@ class AUV():
         self.reward_memory = np.zeros(self.mem_size,dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size,dtype=np.bool_)
         
+        self.losses= []
+        # self.relevant_state_memory = np.zeros((self.mem_size,*input_dims),dtype=np.float32)
+        # self.relevant_action_memory = np.zeros(self.mem_size,dtype=np.int32)
+        # self.relevant_reward_memory = np.zeros(self.mem_size,dtype=np.float32)
+        # self.relevant_new_state_memory= np.zeros((self.mem_size,*input_dims),dtype=np.float32)
     def store_transition(self,state,action,reward, state_,done):
+
         index=self.mem_cntr % self.mem_size # wrapping around to earliest memories if full
         self.state_memory[index] = state
         self.new_state_memory[index] = state_
@@ -58,6 +64,11 @@ class AUV():
         self.reward_memory[index] = reward
         self.terminal_memory[index] = done
 
+        # if reward > 90.0: 
+        #     self.relevant_state_memory[index] = state
+        #     self.relevant_action_memory[index] = action
+        #     self.relevant_reward_memory[index] = reward
+        #     self.new_state_memory[index] = state_
         self.mem_cntr += 1
     def choose_action(self,observation):
         if np.random.random() > self.epsilon:
@@ -107,11 +118,14 @@ class AUV():
         q_target = reward_batch + torch.tensor(self.gamma).to(self.Q_eval.device)*torch.max(q_next, dim=1)[0] # what is dis
 
         loss = self.Q_eval.loss(q_target, q_eval).to(self.Q_eval.device)
-        
+        with torch.no_grad():
+            self.losses.append(loss.detach().cpu().numpy().tolist())
         loss.backward()
         self.Q_eval.optimizer.step()
 
         self.iter_cntr += 1
+        
+     
         # control random choice here
         # self.epsilon = self.epsilon - self.eps_dec \
         #     if self.epsilon > self.eps_min else self.eps_min

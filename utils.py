@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import gym
-
+import random 
 def plotLearning(x, scores, epsilons, filename, lines=None):
     fig=plt.figure()
     ax=fig.add_subplot(111, label="1")
@@ -119,3 +119,7 @@ def make_env(env_name):
     env = MoveImgChannel(env)
     env = BufferWrapper(env, 4)
     return ScaleFrame(env)
+
+def get_sample(probability):
+    if 0.0 <= probability <= 1.0:
+        return random.random() < probability
