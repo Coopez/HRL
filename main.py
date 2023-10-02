@@ -9,11 +9,11 @@ from env.grids import AUVGrid
 __length = 15
 __network_input_size =7 #((__length*2)-1)**2 + 5
 _guideline = 30.0
-render_mode = "human"
+render_mode = "practical"
 if __name__ == '__main__':
     env = AUVGrid(env_length=__length,render_mode=render_mode)#gym.make('gym_examples/GridWorld-v0')
     agent = AUV(gamma=0.99, epsilon=1.0, batch_size=64, n_actions=4, eps_end=0.01,
-                  input_dims=[__network_input_size], lr=0.001,eps_dec=0.01)
+                  input_dims=[__network_input_size], lr=0.001,eps_dec=0.01,env_size = __length*2)
     scores, eps_history = [], []
     n_games = 120
     change_counter= 0

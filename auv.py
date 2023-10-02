@@ -30,7 +30,7 @@ class DeepQNetwork(nn.Module):
         return state
 
 class AUV():
-    def __init__(self, gamma, epsilon, lr, input_dims,batch_size,n_actions,
+    def __init__(self, gamma, epsilon, lr, input_dims,batch_size,n_actions, env_size,
                  max_mem_size=10000, eps_end=0.01,eps_dec=5e-4,layer_n1 = 256,layer_n2 = 256) -> None:
 
         self.gamma = gamma
@@ -43,7 +43,7 @@ class AUV():
         self.batch_size = batch_size
         self.mem_cntr = 0
         self.iter_cntr = 0
-        
+        self.env_size = env_size
         # deep Q learning only for discrete action spaces- need diff alg if changing to a course based pathing approach 
         self.Q_eval = DeepQNetwork(self.lr,n_actions=n_actions,input_dims=input_dims,fc1_dims=layer_n1 ,fc2_dims=layer_n2 ) 
         self.Q_target = DeepQNetwork(self.lr,n_actions=n_actions,input_dims=input_dims,fc1_dims=layer_n1 ,fc2_dims=layer_n2 )
@@ -65,8 +65,8 @@ class AUV():
         # self.relevant_new_state_memory= np.zeros((self.mem_size,*input_dims),dtype=np.float32)
     def norm_loc(self,state): # minmax scaled now
         loc = state[0:2]
-        loc[0] = (loc[0]-0.0) / ((self.size -1)-0.0)
-        loc[1] = (loc[1]-0.0) / ((self.size -1)-0.0)
+        loc[0] = (loc[0]-0.0) / ((self.env_size -1)-0.0)
+        loc[1] = (loc[1]-0.0) / ((self.env_size -1)-0.0)
         state[0:2] = loc
         return state
     def store_transition(self,state,action,reward, state_,done):
