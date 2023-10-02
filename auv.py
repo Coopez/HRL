@@ -15,17 +15,19 @@ class DeepQNetwork(nn.Module):
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
         self.fc3 = nn.Linear(self.fc2_dims, self.n_actions)
         self.sm = nn.Softmax()
+        self.sig = nn.Sigmoid()
+        self.relu= nn.ReLU()
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         self.loss = nn.CrossEntropyLoss()
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.to(self.device)
-
+        
     def forward(self, state):
-        x = f.relu(self.fc1(state))
-        y = f.relu(self.fc2(x))
-        actions = self.fc3(y)
+        state = self.relu(self.fc1(state))
+        state = self.relu(self.fc2(state))
+        state = self.sm(self.fc3(state))
 
-        return actions
+        return state
 
 class AUV():
     def __init__(self, gamma, epsilon, lr, input_dims,batch_size,n_actions,
@@ -41,8 +43,14 @@ class AUV():
         self.batch_size = batch_size
         self.mem_cntr = 0
         self.iter_cntr = 0
+        
         # deep Q learning only for discrete action spaces- need diff alg if changing to a course based pathing approach 
         self.Q_eval = DeepQNetwork(self.lr,n_actions=n_actions,input_dims=input_dims,fc1_dims=layer_n1 ,fc2_dims=layer_n2 ) 
+        self.Q_target = DeepQNetwork(self.lr,n_actions=n_actions,input_dims=input_dims,fc1_dims=layer_n1 ,fc2_dims=layer_n2 )
+        #copy weights
+        self.Q_target.load_state_dict(self.Q_eval.state_dict())
+        
+        
         
         self.state_memory = np.zeros((self.mem_size,*input_dims),dtype=np.float32)
         self.new_state_memory = np.zeros((self.mem_size,*input_dims),dtype=np.float32)
@@ -55,11 +63,17 @@ class AUV():
         # self.relevant_action_memory = np.zeros(self.mem_size,dtype=np.int32)
         # self.relevant_reward_memory = np.zeros(self.mem_size,dtype=np.float32)
         # self.relevant_new_state_memory= np.zeros((self.mem_size,*input_dims),dtype=np.float32)
+    def norm_loc(self,state): # minmax scaled now
+        loc = state[0:2]
+        loc[0] = (loc[0]-0.0) / ((self.size -1)-0.0)
+        loc[1] = (loc[1]-0.0) / ((self.size -1)-0.0)
+        state[0:2] = loc
+        return state
     def store_transition(self,state,action,reward, state_,done):
 
         index=self.mem_cntr % self.mem_size # wrapping around to earliest memories if full
-        self.state_memory[index] = state
-        self.new_state_memory[index] = state_
+        self.state_memory[index] = self.norm_loc(state)
+        self.new_state_memory[index] = self.norm_loc(state_)
         self.action_memory[index] = action
         self.reward_memory[index] = reward
         self.terminal_memory[index] = done
@@ -74,7 +88,8 @@ class AUV():
         if np.random.random() > self.epsilon:
             state = torch.tensor([observation],dtype = torch.float32).to(self.Q_eval.device)
             actions = self.Q_eval.forward(state)
-            action = torch.argmax(actions).item()
+            #action = torch.argmax(actions).item()
+            action = np.random.choice([0,1,2,3], p=actions.detach().cpu().numpy().flatten())
         else:
             action = np.random.choice(self.action_space)
         return action
@@ -89,14 +104,15 @@ class AUV():
         max_mem =  min(self.mem_cntr, self.mem_size)
         
         # random choice is for noobs
-        #batch = np.random.choice(max_mem,self.batch_size, replace= False) # also kind of an index
+        batch = np.random.choice(max_mem,self.batch_size, replace= False) # also kind of an index
         
-        index = self.mem_cntr % self.mem_size
-        index_u = (self.mem_cntr - self.batch_size) % self.mem_size
-        if index < index_u:
-            batch = np.concatenate((np.arange(index_u,self.mem_size),np.arange(0,index)))
-        else:
-            batch = np.arange(index_u,index)
+        # index = self.mem_cntr % self.mem_size
+        # index_u = (self.mem_cntr - self.batch_size) % self.mem_size
+        
+        # if index < index_u:
+        #     batch = np.concatenate((np.arange(index_u,self.mem_size),np.arange(0,index)))
+        # else:
+        #     batch = np.arange(index_u,index)
 
         batch_index = np.arange(self.batch_size,dtype=np.int32)
         # sending batches to network
@@ -111,15 +127,19 @@ class AUV():
 
         # results
         q_eval = self.Q_eval.forward(state_batch)[batch_index, action_batch]
-        q_next = self.Q_eval.forward(new_state_batch)
         
-        q_next[terminal_batch] = torch.tensor(0.0).to(self.Q_eval.device)
+        
+        with torch.no_grad():    
+            q_next = self.Q_target.forward(new_state_batch)
+        
+            q_next[terminal_batch] = torch.tensor(0.0).to(self.Q_target.device)
 
-        q_target = reward_batch + torch.tensor(self.gamma).to(self.Q_eval.device)*torch.max(q_next, dim=1)[0] # what is dis
+            q_target = reward_batch + torch.tensor(self.gamma).to(self.Q_target.device)*torch.max(q_next, dim=1)[0] # what is dis
 
         loss = self.Q_eval.loss(q_target, q_eval).to(self.Q_eval.device)
         with torch.no_grad():
             self.losses.append(loss.detach().cpu().numpy().tolist())
+        
         loss.backward()
         self.Q_eval.optimizer.step()
 
@@ -130,7 +150,8 @@ class AUV():
         # self.epsilon = self.epsilon - self.eps_dec \
         #     if self.epsilon > self.eps_min else self.eps_min
 
-
+    def copy_weights(self):
+        self.Q_target.load_state_dict(self.Q_eval.state_dict())
 
 # Legacy starts here
 

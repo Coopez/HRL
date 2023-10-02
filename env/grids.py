@@ -97,19 +97,22 @@ class AUVGrid(gym.Env):
         """
         self.window = None
         self.clock = None
+        self.time_step = 0.0
     
-    def _get_obs(self):
-        return self._agent_location#{"agent": self._agent_location}#, "target": self._target_location}
+    
+    def _get_obs(self): # minmax scaled now
+        return self._agent_location
    
     def _get_info(self):
         #return {"distance": np.linalg.norm(self._agent_location - self._target_location, ord=1)}
         # this needs to be changed to pollution levels
         p = self.pollution[*self._agent_location].numpy().item()
-        cs = float(self.cs) # can be expanded if current is uneven
+        cs = float(self.cs) # AS LONG AS WE USE ELLIPTICAL MAX IS 40 and MIN 1
+        cs = (cs-1.0)/(40.0-1.0) # minmax 
         csdir = float(self.cdir) 
         #flat_hist = self.observation_space.flatten()
         #return np.concatenate((flat_hist,np.array([p,cs,csdir])))
-        return np.array([p,cs,csdir])
+        return np.array([p,cs,*self.angle_to_vector(csdir)])
     
     def angle_to_vector(self,angle_degrees):
         # Convert degrees to radians
@@ -119,7 +122,7 @@ class AUVGrid(gym.Env):
         x = math.cos(angle_radians)
         y = math.sin(angle_radians)
     
-        return (x, y)
+        return x, y
     
     def import_env(self,env_length):
         self.env_length = env_length
@@ -132,7 +135,7 @@ class AUVGrid(gym.Env):
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
-
+        self.time_step = 0.0
         # Choose the agent's location uniformly at random
         #self._agent_location = self.np_random.integers(0, self.size, size=2, dtype=int)
         self._agent_location = np.array([0,0])
@@ -163,7 +166,7 @@ class AUVGrid(gym.Env):
         if self.observation_space[*self._agent_location] == 0.0:
             self.observation_space[*self._agent_location] = 1.0 if self.pollution[*self._agent_location] < 0.001 else self.pollution[*self._agent_location]+2
         elif self.observation_space[*self._agent_location] >  0.0: #or self.observation_space[*self._agent_location] <  0.0: 
-            self.observation_space[*self._agent_location] -= 1.001
+            self.observation_space[*self._agent_location] = -1.0
         else:
             pass 
         
